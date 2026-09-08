@@ -64,11 +64,12 @@ def extract_calorie(cal_info_str):
 
 def analyze_school_meals(rows):
     """
-    급식 데이터 리스트를 받아서 (날짜리스트, 칼로리리스트)를 반환
+    급식 데이터 리스트를 받아서 (날짜리스트, 칼로리리스트, 메뉴리스트)를 반환
     """
     dates = [row["MLSV_YMD"] for row in rows]
     calories = [extract_calorie(row["CAL_INFO"]) for row in rows]
-    return dates, calories
+    menus = [row["DDISH_NM"] for row in rows]
+    return dates, calories, menus
 
 
 # ============================
@@ -108,38 +109,41 @@ if "search_results" in st.session_state:
         to_str = to_date.strftime("%Y%m%d")
 
         rows = get_meal_data(office_code, school_code, from_str, to_str)
-        dates, calories = analyze_school_meals(rows)
+        dates, calories, menus = analyze_school_meals(rows)
 
         if calories:
-            max_cal = max(calories)
-            max_index = calories.index(max_cal)
-            max_date = dates[max_index]
-            avg_cal = sum(calories) / len(calories)
+            # 날짜, 칼로리, 메뉴를 하나로 묶어서 칼로리 높은 순으로 정렬
+            combined = list(zip(dates, calories, menus))
+            combined.sort(key=lambda x: x[1], reverse=True)
+
+            sorted_dates = [f"{d} " for d, c, m in combined]
+            sorted_calories = [c for d, c, m in combined]
+
+            # 막대 색상: 가장 높은 값만 빨간색, 나머지는 파란색
+            colors = ['red'] + ['royalblue'] * (len(sorted_calories) - 1)
 
             st.divider()
-            st.header("3. 결과 그래프")
+            st.header("3. 칼로리 높은 순 그래프")
 
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=dates, y=calories,
-                mode='lines+markers',
-                name="칼로리"
-            ))
-            fig.add_trace(go.Scatter(
-                x=[max_date], y=[max_cal],
-                mode='markers',
-                marker=dict(color='red', size=15, symbol='star'),
-                name=f"최고 칼로리: {max_cal} Kcal"
-            ))
+            fig = go.Figure(data=[
+                go.Bar(
+                    x=sorted_dates,
+                    y=sorted_calories,
+                    marker_color=colors,
+                    text=[f"{c:.0f}" for c in sorted_calories],
+                    textposition='outside'
+                )
+            ])
+
             fig.update_layout(
-                title=f"{selected} 급식 칼로리 변화",
-                xaxis_title="날짜",
+                title=f"{selected} 급식 칼로리 순위",
+                xaxis_title="급식 날짜",
                 yaxis_title="칼로리(Kcal)",
-                hovermode="x unified"
+                xaxis_tickangle=-45
             )
             st.plotly_chart(fig)
 
-            st.success(f"최고 칼로리 날짜: **{max_date}**, 칼로리: **{max_cal} Kcal**")
-            st.info(f"평균 칼로리: **{avg_cal:.1f} Kcal**")
+            st.success(f"가장 칼로리가 높은 급식: **{combined[0][0]}**, **{combined[0][1]} Kcal**")
+            st.caption(f"메뉴: {combined[0][2]}")
         else:
             st.warning("표시할 급식 데이터가 없습니다.")
