@@ -1,11 +1,6 @@
 import requests
 import re
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
-
-# ===== 한글 폰트 설정 (윈도우 기준, 맥은 'AppleGothic') =====
-plt.rcParams['font.family'] = 'Malgun Gothic'
-plt.rcParams['axes.unicode_minus'] = False
+import plotly.graph_objects as go
 
 
 def get_meal_data(office_code, school_code, from_date, to_date, api_key):
@@ -27,7 +22,6 @@ def get_meal_data(office_code, school_code, from_date, to_date, api_key):
     response = requests.get(url, params=params)
     data = response.json()
 
-    # 정상적으로 데이터가 있는 경우만 처리
     if "mealServiceDietInfo" not in data:
         print("데이터를 가져오지 못했습니다. 학교 코드나 날짜를 확인해보세요.")
         return []
@@ -64,48 +58,64 @@ def analyze_school_meals(rows):
 
 def plot_my_school(dates, calories, school_name):
     """
-    우리 학교의 날짜별 칼로리 그래프 + 최고 칼로리 급식 표시
+    Plotly를 이용해 우리 학교의 날짜별 칼로리 그래프 + 최고 칼로리 급식 표시
     """
-    plt.figure(figsize=(12, 6))
-    plt.plot(dates, calories, marker='o', label=f"{school_name} 칼로리")
-
-    # 최댓값 찾기
     max_cal = max(calories)
     max_index = calories.index(max_cal)
     max_date = dates[max_index]
 
-    # 최댓값 지점 강조 표시
-    plt.scatter(max_date, max_cal, color='red', s=150, zorder=5,
-                label=f"최고 칼로리: {max_cal} Kcal ({max_date})")
+    fig = go.Figure()
 
-    plt.xticks(rotation=45)
-    plt.xlabel("급식 날짜")
-    plt.ylabel("칼로리 (Kcal)")
-    plt.title(f"{school_name} 급식 칼로리 변화")
-    plt.legend()
-    plt.tight_layout()
-    plt.grid(True, alpha=0.3)
-    plt.show()
+    # 전체 칼로리 변화 선 그래프
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=calories,
+        mode='lines+markers',
+        name=f"{school_name} 칼로리",
+        line=dict(color='royalblue')
+    ))
+
+    # 최고 칼로리 지점 강조 표시
+    fig.add_trace(go.Scatter(
+        x=[max_date],
+        y=[max_cal],
+        mode='markers',
+        marker=dict(color='red', size=15, symbol='star'),
+        name=f"최고 칼로리: {max_cal} Kcal ({max_date})"
+    ))
+
+    fig.update_layout(
+        title=f"{school_name} 급식 칼로리 변화",
+        xaxis_title="급식 날짜",
+        yaxis_title="칼로리 (Kcal)",
+        hovermode="x unified"
+    )
+
+    fig.show()
 
     print(f"\n[결과] {school_name}에서 칼로리가 가장 높았던 급식 날짜는 {max_date}이며, {max_cal} Kcal 입니다.")
 
 
 def plot_average_comparison(school_names, average_calories):
     """
-    여러 학교의 평균 칼로리를 막대그래프로 비교
+    Plotly 막대그래프로 여러 학교의 평균 칼로리 비교
     """
-    plt.figure(figsize=(8, 6))
-    bars = plt.bar(school_names, average_calories, color=['skyblue', 'salmon', 'lightgreen'])
+    fig = go.Figure(data=[
+        go.Bar(
+            x=school_names,
+            y=average_calories,
+            text=[f"{avg:.1f}" for avg in average_calories],
+            textposition='outside',
+            marker_color=['skyblue', 'salmon', 'lightgreen']
+        )
+    ])
 
-    # 막대 위에 값 표시
-    for bar, avg in zip(bars, average_calories):
-        plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 5,
-                  f"{avg:.1f}", ha='center', fontsize=11)
+    fig.update_layout(
+        title="학교별 평균 급식 칼로리 비교",
+        yaxis_title="평균 칼로리 (Kcal)"
+    )
 
-    plt.ylabel("평균 칼로리 (Kcal)")
-    plt.title("학교별 평균 급식 칼로리 비교")
-    plt.tight_layout()
-    plt.show()
+    fig.show()
 
 
 # ========================================
