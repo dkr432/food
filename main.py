@@ -3,14 +3,10 @@ import requests
 import re
 import plotly.graph_objects as go
 
-# Streamlit Secrets에서 API 키 불러오기
 NEIS_API_KEY = st.secrets["NEIS_API_KEY"]
 
 
 def search_school(school_name):
-    """
-    학교 이름으로 학교 코드와 교육청 코드를 찾는 함수
-    """
     url = "https://open.neis.go.kr/hub/schoolInfo"
     params = {
         "KEY": NEIS_API_KEY,
@@ -29,9 +25,6 @@ def search_school(school_name):
 
 
 def get_meal_data(office_code, school_code, from_date, to_date):
-    """
-    나이스 급식 API를 호출해서 급식 정보를 리스트로 반환하는 함수
-    """
     url = "https://open.neis.go.kr/hub/mealServiceDietInfo"
     params = {
         "KEY": NEIS_API_KEY,
@@ -48,28 +41,29 @@ def get_meal_data(office_code, school_code, from_date, to_date):
 
     if "mealServiceDietInfo" not in data:
         st.error("급식 데이터를 가져오지 못했습니다. 날짜나 학교 코드를 확인해주세요.")
-        st.write("API 응답 내용:", data)  # 에러 원인 확인용
+        st.write("API 응답 내용:", data)
         return []
 
     return data["mealServiceDietInfo"][1]["row"]
 
 
 def extract_calorie(cal_info_str):
-    """
-    '560.5 Kcal' 같은 문자열에서 숫자만 뽑아내는 함수
-    """
     match = re.search(r"[\d.]+", cal_info_str)
     return float(match.group()) if match else 0.0
 
 
 def analyze_school_meals(rows):
-    """
-    급식 데이터 리스트를 받아서 (날짜리스트, 칼로리리스트, 메뉴리스트)를 반환
-    """
     dates = [row["MLSV_YMD"] for row in rows]
     calories = [extract_calorie(row["CAL_INFO"]) for row in rows]
     menus = [row["DDISH_NM"] for row in rows]
     return dates, calories, menus
+
+
+def format_date(yyyymmdd):
+    """
+    '20240315' -> '2024-03-15' 형태로 보기 좋게 변환
+    """
+    return f"{yyyymmdd[:4]}-{yyyymmdd[4:6]}-{yyyymmdd[6:]}"
 
 
 # ============================
@@ -112,14 +106,15 @@ if "search_results" in st.session_state:
         dates, calories, menus = analyze_school_meals(rows)
 
         if calories:
-            # 날짜, 칼로리, 메뉴를 하나로 묶어서 칼로리 높은 순으로 정렬
             combined = list(zip(dates, calories, menus))
             combined.sort(key=lambda x: x[1], reverse=True)
 
-            sorted_dates = [f"{d} " for d, c, m in combined]
+            # 보기 좋은 날짜 형식 + 순서를 유지하기 위해 앞에 인덱스 번호 추가
+            sorted_labels = [
+                f"{i+1}. {format_date(d)}" for i, (d, c, m) in enumerate(combined)
+            ]
             sorted_calories = [c for d, c, m in combined]
 
-            # 막대 색상: 가장 높은 값만 빨간색, 나머지는 파란색
             colors = ['red'] + ['royalblue'] * (len(sorted_calories) - 1)
 
             st.divider()
@@ -127,7 +122,7 @@ if "search_results" in st.session_state:
 
             fig = go.Figure(data=[
                 go.Bar(
-                    x=sorted_dates,
+                    x=sorted_labels,
                     y=sorted_calories,
                     marker_color=colors,
                     text=[f"{c:.0f}" for c in sorted_calories],
@@ -137,13 +132,14 @@ if "search_results" in st.session_state:
 
             fig.update_layout(
                 title=f"{selected} 급식 칼로리 순위",
-                xaxis_title="급식 날짜",
+                xaxis_title="급식 날짜 (순위)",
                 yaxis_title="칼로리(Kcal)",
-                xaxis_tickangle=-45
+                xaxis_tickangle=-45,
+                xaxis_type="category"   # x축을 카테고리(텍스트)로 고정 → 핵심 수정 사항
             )
             st.plotly_chart(fig)
 
-            st.success(f"가장 칼로리가 높은 급식: **{combined[0][0]}**, **{combined[0][1]} Kcal**")
+            st.success(f"가장 칼로리가 높은 급식: **{format_date(combined[0][0])}**, **{combined[0][1]} Kcal**")
             st.caption(f"메뉴: {combined[0][2]}")
         else:
             st.warning("표시할 급식 데이터가 없습니다.")
