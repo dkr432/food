@@ -40,7 +40,7 @@ def analyze_school_meals(rows):
 # ===== Streamlit 화면 구성 시작 =====
 st.title("우리 학교 급식 칼로리 분석")
 
-API_KEY = "여기에_인증키_입력"
+API_KEY =  NEIS_API_KEY = "4700574c38d548efb942c1605da72a53"
 office_code = "B10"
 school_code = "7010570"
 from_date = "20240301"
